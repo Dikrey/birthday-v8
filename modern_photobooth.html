@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Photobooth</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            position: relative;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            animation: fadeInDown 1s ease-out;
+        }
+
+        .header h1 {
+            font-size: 3.5rem;
+            color: white;
+            text-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: gradientShift 3s ease-in-out infinite;
+        }
+
+        .header p {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 1.2rem;
+            font-weight: 300;
+        }
+
+        .photobooth-container {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 30px;
+            align-items: start;
+        }
+
+        .camera-section {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 30px;
+            animation: fadeInLeft 1s ease-out;
+        }
+
+        .controls-section {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 30px;
+            animation: fadeInRight 1s ease-out;
+        }
+
+        .camera-container {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 4/3;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        #video, #canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .frame-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            opacity: 0.7;
+            z-index: 5;
+        }
+
+        .countdown {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 8rem;
+            font-weight: bold;
+            color: white;
+            text-shadow: 0 4px 15px rgba(0, 0, 0, 0.7);
+            z-index: 20;
+            animation: pulse 1s infinite;
+        }
+
+        .flash {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: white;
+            opacity: 0;
+            z-index: 15;
+        }
+
+        .control-group {
+            margin-bottom: 25px;
+        }
+
+        .control-group label {
+            display: block;
+            color: white;
+            font-weight: 600;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
+
+        .frame-selector {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .frame-option {
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid transparent;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+            color: white;
+            font-weight: 500;
+        }
+
+        .frame-option:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .frame-option.active {
+            border-color: #4ecdc4;
+            background: rgba(78, 205, 196, 0.3);
+            box-shadow: 0 5px 15px rgba(78, 205, 196, 0.4);
+        }
+
+        .effect-selector {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .effect-option {
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid transparent;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+            color: white;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .effect-option:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .effect-option.active {
+            border-color: #ff6b6b;
+            background: rgba(255, 107, 107, 0.3);
+            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.4);
+        }
+
+        .capture-btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            border: none;
+            border-radius: 50px;
+            color: white;
+            font-size: 1.3rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            margin-bottom: 20px;
+        }
+
+        .capture-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+        }
+
+        .capture-btn:active {
+            transform: translateY(-1px);
+        }
+
+        .capture-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .photo-gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .photo-item {
+            aspect-ratio: 1;
+            border-radius: 10px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .photo-item:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+        }
+
+        .photo-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .telegram-config {
+            margin-top: 20px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+
+        .telegram-config h3 {
+            color: white;
+            margin-bottom: 15px;
+            font-size: 1.2rem;
+        }
+
+        .telegram-config input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 1rem;
+            margin-bottom: 10px;
+        }
+
+        .telegram-config input::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .status-indicator {
+            padding: 10px;
+            border-radius: 10px;
+            margin-top: 10px;
+            font-weight: 500;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .status-success {
+            background: rgba(78, 205, 196, 0.3);
+            color: #4ecdc4;
+            border: 1px solid rgba(78, 205, 196, 0.5);
+        }
+
+        .status-error {
+            background: rgba(255, 107, 107, 0.3);
+            color: #ff6b6b;
+            border: 1px solid rgba(255, 107, 107, 0.5);
+        }
+
+        .floating-particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            animation: float 6s ease-in-out infinite;
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes fadeInRight {
+            from {
+                opacity: 0;
+                transform: translateX(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes gradientShift {
+            0%, 100% {
+                background-position: 0% 50%;
+            }
+            50% {
+                background-position: 100% 50%;
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: translate(-50%, -50%) scale(1);
+            }
+            50% {
+                transform: translate(-50%, -50%) scale(1.1);
+            }
+        }
+
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0px) rotate(0deg);
+                opacity: 0;
+            }
+            50% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(-100vh) rotate(360deg);
+                opacity: 0;
+            }
+        }
+
+        .flash-animation {
+            animation: flashEffect 0.3s ease-out;
+        }
+
+        @keyframes flashEffect {
+            0% { opacity: 0; }
+            50% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        @media (max-width: 768px) {
+            .photobooth-container {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+            
+            .header h1 {
+                font-size: 2.5rem;
+            }
+            
+            .countdown {
+                font-size: 6rem;
+            }
+            
+            .effect-selector {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .container {
+                padding: 15px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .countdown {
+                font-size: 4rem;
+            }
+            
+            .frame-selector {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="floating-particles" id="particles"></div>
+    
+    <div class="container">
+        <div class="header">
+            <h1>✨ Modern Photobooth ✨</h1>
+            <p>Capture beautiful moments with amazing effects</p>
+        </div>
+
+        <div class="photobooth-container">
+            <div class="camera-section">
+                <div class="camera-container">
+                    <video id="video" autoplay muted playsinline></video>
+                    <canvas id="canvas" style="display: none;"></canvas>
+                    <div class="overlay" id="overlay"></div>
+                    <div class="frame-overlay" id="frameOverlay"></div>
+                    <div class="countdown" id="countdown" style="display: none;"></div>
+                    <div class="flash" id="flash"></div>
+                </div>
+                
+                <button class="capture-btn" id="captureBtn">📸 Take Photo</button>
+                
+                <div class="photo-gallery" id="photoGallery"></div>
+            </div>
+
+            <div class="controls-section">
+                <div class="control-group">
+                    <label>Frame Layout</label>
+                    <div class="frame-selector">
+                        <div class="frame-option active" data-frame="1">Single Photo</div>
+                        <div class="frame-option" data-frame="2">2 Photos</div>
+                        <div class="frame-option" data-frame="4">4 Photos</div>
+                        <div class="frame-option" data-frame="6">6 Photos</div>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Photo Effects</label>
+                    <div class="effect-selector">
+                        <div class="effect-option active" data-effect="none">Normal</div>
+                        <div class="effect-option" data-effect="sepia">Sepia</div>
+                        <div class="effect-option" data-effect="grayscale">B&W</div>
+                        <div class="effect-option" data-effect="blur">Blur</div>
+                        <div class="effect-option" data-effect="brightness">Bright</div>
+                        <div class="effect-option" data-effect="contrast">Contrast</div>
+                    </div>
+                </div>
+
+                <div class="telegram-config">
+                    <h3>🤖 Telegram Bot Configuration</h3>
+                    <input type="text" id="botToken" placeholder="Bot Token (dari @BotFather)">
+                    <input type="text" id="chatId" placeholder="Chat ID (target pengiriman)">
+                    <div class="status-indicator" id="statusIndicator" style="display: none;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class ModernPhotobooth {
+            constructor() {
+                this.video = document.getElementById('video');
+                this.canvas = document.getElementById('canvas');
+                this.captureBtn = document.getElementById('captureBtn');
+                this.photoGallery = document.getElementById('photoGallery');
+                this.countdown = document.getElementById('countdown');
+                this.flash = document.getElementById('flash');
+                this.frameOverlay = document.getElementById('frameOverlay');
+                
+                this.currentFrame = 1;
+                this.currentEffect = 'none';
+                this.capturedPhotos = [];
+                this.framePhotos = [];
+                this.isCapturing = false;
+                
+                this.botToken = '';
+                this.chatId = '';
+                
+                this.init();
+            }
+
+            async init() {
+                await this.initCamera();
+                this.initEventListeners();
+                this.createFloatingParticles();
+                this.loadTelegramConfig();
+            }
+
+            async initCamera() {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: { 
+                            width: { ideal: 1280 }, 
+                            height: { ideal: 720 },
+                            facingMode: 'user'
+                        }
+                    });
+                    this.video.srcObject = stream;
+                } catch (error) {
+                    console.error('Error accessing camera:', error);
+                    alert('Tidak dapat mengakses kamera. Pastikan izin kamera telah diberikan.');
+                }
+            }
+
+            initEventListeners() {
+                this.captureBtn.addEventListener('click', () => this.startCapture());
+                
+                // Frame selector
+                document.querySelectorAll('.frame-option').forEach(option => {
+                    option.addEventListener('click', (e) => {
+                        document.querySelectorAll('.frame-option').forEach(o => o.classList.remove('active'));
+                        e.target.classList.add('active');
+                        this.currentFrame = parseInt(e.target.dataset.frame);
+                        this.framePhotos = [];
+                        this.updateGallery();
+                    });
+                });
+
+                // Effect selector
+                document.querySelectorAll('.effect-option').forEach(option => {
+                    option.addEventListener('click', (e) => {
+                        document.querySelectorAll('.effect-option').forEach(o => o.classList.remove('active'));
+                        e.target.classList.add('active');
+                        this.currentEffect = e.target.dataset.effect;
+                        this.applyVideoEffect();
+                    });
+                });
+
+                // Telegram config
+                document.getElementById('botToken').addEventListener('input', (e) => {
+                    this.botToken = e.target.value;
+                    this.saveTelegramConfig();
+                });
+
+                document.getElementById('chatId').addEventListener('input', (e) => {
+                    this.chatId = e.target.value;
+                    this.saveTelegramConfig();
+                });
+            }
+
+            applyVideoEffect() {
+                const effects = {
+                    none: 'none',
+                    sepia: 'sepia(100%)',
+                    grayscale: 'grayscale(100%)',
+                    blur: 'blur(2px)',
+                    brightness: 'brightness(150%)',
+                    contrast: 'contrast(150%)'
+                };
+                
+                this.video.style.filter = effects[this.currentEffect] || 'none';
+            }
+
+            async startCapture() {
+                if (this.isCapturing) return;
+                
+                this.isCapturing = true;
+                this.captureBtn.disabled = true;
+                
+                await this.countdownTimer();
+                await this.capturePhoto();
+                
+                this.isCapturing = false;
+                this.captureBtn.disabled = false;
+            }
+
+            async countdownTimer() {
+                return new Promise((resolve) => {
+                    let count = 3;
+                    this.countdown.style.display = 'block';
+                    
+                    const timer = setInterval(() => {
+                        this.countdown.textContent = count;
+                        count--;
+                        
+                        if (count < 0) {
+                            clearInterval(timer);
+                            this.countdown.style.display = 'none';
+                            resolve();
+                        }
+                    }, 1000);
+                });
+            }
+
+            async capturePhoto() {
+                // Flash effect
+                this.flash.classList.add('flash-animation');
+                setTimeout(() => this.flash.classList.remove('flash-animation'), 300);
+                
+                // Capture photo
+                const ctx = this.canvas.getContext('2d');
+                this.canvas.width = this.video.videoWidth;
+                this.canvas.height = this.video.videoHeight;
+                
+                // Apply effect to canvas
+                this.applyCanvasEffect(ctx);
+                ctx.drawImage(this.video, 0, 0);
+                
+                const photoData = this.canvas.toDataURL('image/jpeg', 0.9);
+                this.framePhotos.push(photoData);
+                
+                // Check if frame is complete
+                if (this.framePhotos.length >= this.currentFrame) {
+                    await this.createFinalImage();
+                    this.framePhotos = [];
+                } else {
+                    // Continue capturing for multi-photo frames
+                    setTimeout(() => {
+                        if (this.framePhotos.length < this.currentFrame) {
+                            this.startCapture();
+                        }
+                    }, 2000);
+                }
+                
+                this.updateGallery();
+            }
+
+            applyCanvasEffect(ctx) {
+                const effects = {
+                    sepia: () => {
+                        ctx.filter = 'sepia(100%)';
+                    },
+                    grayscale: () => {
+                        ctx.filter = 'grayscale(100%)';
+                    },
+                    blur: () => {
+                        ctx.filter = 'blur(2px)';
+                    },
+                    brightness: () => {
+                        ctx.filter = 'brightness(150%)';
+                    },
+                    contrast: () => {
+                        ctx.filter = 'contrast(150%)';
+                    }
+                };
+                
+                if (effects[this.currentEffect]) {
+                    effects[this.currentEffect]();
+                }
+            }
+
+            async createFinalImage() {
+                const finalCanvas = document.createElement('canvas');
+                const ctx = finalCanvas.getContext('2d');
+                
+                const layouts = {
+                    1: { cols: 1, rows: 1, width: 800, height: 600 },
+                    2: { cols: 2, rows: 1, width: 800, height: 400 },
+                    4: { cols: 2, rows: 2, width: 800, height: 800 },
+                    6: { cols: 3, rows: 2, width: 900, height: 600 }
+                };
+                
+                const layout = layouts[this.currentFrame];
+                finalCanvas.width = layout.width;
+                finalCanvas.height = layout.height;
+                
+                // Background
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
+                
+                // Draw photos
+                const photoWidth = layout.width / layout.cols;
+                const photoHeight = layout.height / layout.rows;
+                
+                for (let i = 0; i < this.framePhotos.length; i++) {
+                    const img = new Image();
+                    img.src = this.framePhotos[i];
+                    
+                    await new Promise((resolve) => {
+                        img.onload = () => {
+                            const col = i % layout.cols;
+                            const row = Math.floor(i / layout.cols);
+                            const x = col * photoWidth;
+                            const y = row * photoHeight;
+                            
+                            ctx.drawImage(img, x, y, photoWidth, photoHeight);
+                            resolve();
+                        };
+                    });
+                }
+                
+                const finalImage = finalCanvas.toDataURL('image/jpeg', 0.9);
+                this.capturedPhotos.push(finalImage);
+                
+                // Send to Telegram
+                await this.sendToTelegram(finalImage);
+            }
+
+            async sendToTelegram(imageData) {
+                if (!this.botToken || !this.chatId) {
+                    this.showStatus('Konfigurasi Telegram belum lengkap', 'error');
+                    return;
+                }
+
+                try {
+                    // Get device info
+                    const deviceInfo = await this.getDeviceInfo();
+                    
+                    // Convert base64 to blob
+                    const response = await fetch(imageData);
+                    const blob = await response.blob();
+                    
+                    // Create form data
+                    const formData = new FormData();
+                    formData.append('chat_id', this.chatId);
+                    formData.append('photo', blob, 'photo.jpg');
+                    formData.append('caption', `📸 New Photo Captured!\n\n⏰ Time: ${deviceInfo.timestamp}\n🌐 IP: ${deviceInfo.ip}\n📱 Device: ${deviceInfo.userAgent}\n🎯 Frame: ${this.currentFrame} photos\n✨ Effect: ${this.currentEffect}`);
+                    
+                    const telegramResponse = await fetch(`https://api.telegram.org/bot${this.botToken}/sendPhoto`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (telegramResponse.ok) {
+                        this.showStatus('✅ Photo sent to Telegram successfully!', 'success');
+                    } else {
+                        throw new Error('Failed to send to Telegram');
+                    }
+                } catch (error) {
+                    console.error('Error sending to Telegram:', error);
+                    this.showStatus('❌ Failed to send to Telegram', 'error');
+                }
+            }
+
+            async getDeviceInfo() {
+                try {
+                    const ipResponse = await fetch('https://api.ipify.org?format=json');
+                    const ipData = await ipResponse.json();
+                    
+                    return {
+                        timestamp: new Date().toLocaleString('id-ID'),
+                        ip: ipData.ip,
+                        userAgent: navigator.userAgent,
+                        screen: `${screen.width}x${screen.height}`,
+                        language: navigator.language
+                    };
+                } catch (error) {
+                    return {
+                        timestamp: new Date().toLocaleString('id-ID'),
+                        ip: 'Unknown',
+                        userAgent: navigator.userAgent,
+                        screen: `${screen.width}x${screen.height}`,
+                        language: navigator.language
+                    };
+                }
+            }
+
+            showStatus(message, type) {
+                const statusEl = document.getElementById('statusIndicator');
+                statusEl.textContent = message;
+                statusEl.className = `status-indicator status-${type}`;
+                statusEl.style.display = 'block';
+                
+                setTimeout(() => {
+                    statusEl.style.display = 'none';
+                }, 5000);
+            }
+
+            updateGallery() {
+                this.photoGallery.innerHTML = '';
+                
+                this.capturedPhotos.forEach((photo, index) => {
+                    const photoEl = document.createElement('div');
+                    photoEl.className = 'photo-item';
+                    photoEl.innerHTML = `<img src="${photo}" alt="Captured photo ${index + 1}">`;
+                    photoEl.addEventListener('click', () => this.downloadPhoto(photo, index));
+                    this.photoGallery.appendChild(photoEl);
+                });
+            }
+
+            downloadPhoto(photoData, index) {
+                const link = document.createElement('a');
+                link.download = `photobooth-${index + 1}-${Date.now()}.jpg`;
+                link.href = photoData;
+                link.click();
+            }
+
+            createFloatingParticles() {
+                const particlesContainer = document.getElementById('particles');
+                
+                for (let i = 0; i < 50; i++) {
+                    const particle = document.createElement('div');
+                    particle.className = 'particle';
+                    particle.style.left = Math.random() * 100 + '%';
+                    particle.style.animationDelay = Math.random() * 6 + 's';
+                    particle.style.animationDuration = (Math.random() * 3 + 3) + 's';
+                    particlesContainer.appendChild(particle);
+                }
+            }
+
+            saveTelegramConfig() {
+                const config = {
+                    botToken: this.botToken,
+                    chatId: this.chatId
+                };
+                // In a real app, you'd save this to a backend
+                // For demo purposes, we'll just keep it in memory
+            }
+
+            loadTelegramConfig() {
+                // In a real app, you'd load this from a backend
+                // For demo purposes, we'll use empty values
+                document.getElementById('botToken').value = this.botToken;
+                document.getElementById('chatId').value = this.chatId;
+            }
+        }
+
+        // Initialize the photobooth when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new ModernPhotobooth();
+        });
+    </script>
+</body>
+</html>
